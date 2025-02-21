@@ -2,6 +2,7 @@ from ultralytics import YOLO
 from roboflow import Roboflow
 import numpy as np
 
+
 def retrain_vision_model():
     model = YOLO('yolo11m.pt')  # load a pretrained model (recommended for training)
     model.to('cuda')
@@ -22,3 +23,4 @@ def retrain_pose_model():
 def gaussian(x,mean,sigma):
     return 1/np.sqrt(2*np.pi*sigma**2)*np.exp(-(x-mean)/(2*sigma**2))
 """
+
