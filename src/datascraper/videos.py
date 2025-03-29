@@ -12,6 +12,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from entities import *
 
+import json
+import cv2
 
 """Objects used to store data from moonboard climbing videos.
 
@@ -36,7 +38,7 @@ class Video:
         self.start_time = 0 
         self.frames = [] 
                 
-        self.valid_holds = []
+        self.valid_holds = np.array([])
         self.kickboard_in = False 
     
     def set_valid_holds(self,hold_keys):
@@ -45,14 +47,38 @@ class Video:
     def set_kickboard_in(self,kickboard_in):
         self.kickboard_in = kickboard_in
 
-    def load_from_MP4(self, source, year, start_time, end_time):
+    def play_MP4(self, source_path, source, ext, year, start_time, end_time):
+        frame_filter = np.load("frame_filter.npy")
+        path = source_path+source+ext 
+        video,_,_ = tv.io.read_video(path,start_pts = start_time,end_pts = end_time, pts_unit = 'sec',output_format='TCHW')
+        print("Done Reading Video.")
+        transforms = v2.Compose([
+            v2.Resize([640,640])
+        ])
+        frame_filter = np.where(frame_filter == True, False, True)
+        images=np.uint8(np.transpose(transforms(video).float(),(0,2,3,1)).numpy())
+        print(len(images))
+        num_frames = images.shape[0]
+        
+        size = 640, 640
+        duration = 2
+        fps = 25
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter('output.mp4', fourcc, fps, (size[1], size[0]), True)
+        for i in range(num_frames):
+            if frame_filter[i] == True:
+                out.write(images[i][:,:,::-1])
+        out.release()
+
+    
+    def load_from_MP4(self, source_path, source, ext, year, start_time, end_time):
         self.source = source
-        path = "./../../datasets/climbing_videos/mp4/2024_shortuglybeta/"+source+".webm"
+        path = source_path+source+ext
         self.start_time = start_time 
         print("Reading video.")
         video,_,_ = tv.io.read_video(path,start_pts = self.start_time,end_pts = end_time, pts_unit = 'sec',output_format='TCHW')
         print("Done Reading Video.")
-        detect_holds = YOLO('./../../models/runs/detect/train13/weights/best.pt')
+        detect_holds = YOLO('./../../models/runs/detect/2024_shortuglybeta/weights/best.pt')
         detect_pose = YOLO('./../../models/yolov8m-pose.pt')
         transforms = v2.Compose([
             v2.Resize([640,640])
@@ -106,7 +132,7 @@ class Video:
                 valid_holds = list(map(lambda x: x, d[climb_index]['Moves']))
                 valid_hold_names = list(map(lambda x: [x['Description'],x['IsStart'],x['IsEnd']], valid_holds))
 
-                self.valid_holds = sorted(list(map(lambda x: [Board.get_hold_id(x[0]),x[1],x[2]], valid_hold_names)), key=lambda x:x[0])
+                self.valid_holds = np.array(sorted(list(map(lambda x: [Board.get_hold_id(x[0]),x[1],x[2]], valid_hold_names)), key=lambda x:x[0]))
                 self.climb_in_database = True
             except: 
                 print("Couldn't find " + climb_name + " in database.")
@@ -116,7 +142,7 @@ class Video:
         with h5py.File(output, "a") as of:
             vid = of.create_group("video")
             dset0_1 = vid.create_dataset("kickboardIn", data=[self.kickboard_in])
-            dset0_2 = vid.create_dataset("validHolds", data=np.array(self.valid_holds))
+            dset0_2 = vid.create_dataset("validHolds", data=self.valid_holds)
             dset0_2 = vid.create_dataset("inDatabase", data=[self.climb_in_database])
             for i,f in enumerate(self.frames):
                 grp = of.create_group("frame_{}".format(i))
@@ -162,11 +188,14 @@ class Video:
                     self.valid_holds = of["video/validHolds"][:]
             self.frames = frames
     
-    def remove_outlier_frames(self):
+    def remove_outlier_frames(self, save):
         filtered_frames = list(filter(lambda x: x.person.outlier_joints() == False, self.frames))
         print("Original video had "+ str(len(self.frames)) +" frames.")
         print("Removed " + str((len(self.frames) - len(filtered_frames))) +" suspicious frames.")
         print("Current frame number: " + str(len(filtered_frames)))
+        if save==True:
+            filter_list = np.array(list(map(lambda x: x.person.outlier_joints(),self.frames)))
+            np.save("frame_filter.npy",filter_list)
         self.frames = filtered_frames
 
 class ProcessedVideo:
@@ -178,11 +207,11 @@ class ProcessedVideo:
 
         self.moves = []
 
-        self.valid_holds = []
+        self.valid_holds = np.array([])
         self.kickboard_in = False 
     
     def set_valid_holds(self,hold_keys):
-        self.valid_holds = hold_keys
+        self.valid_holds = np.array(hold_keys)
     
     def set_kickboard_in(self,kickboard_in):
         self.kickboard_in = kickboard_in
@@ -265,8 +294,8 @@ class ProcessedVideo:
                     draw.rectangle(hold.region,fill=(0,0,250),width=4)
                     draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
                 n+=1
-            #else:
-            #    draw.rectangle(hold.region,outline='grey',width=1)
+            else:
+                draw.rectangle(hold.region,outline='grey',width=1)
 
         for hold in self.board.footholds:
             if self.kickboard_in == True:
@@ -365,13 +394,13 @@ class ProcessedVideo:
             
         #
 
-        ani = animation.ArtistAnimation(fig, ims, interval=300,repeat=False, blit=True)
-        ani2 = animation.ArtistAnimation(fig2, ims2, interval=300,repeat=True, blit = True)
+        ani = animation.ArtistAnimation(fig, ims, interval=22,repeat=True, blit=True)
+        ani2 = animation.ArtistAnimation(fig2, ims2, interval=22,repeat=True, blit = True)
 
         ax2.legend()
         
         plt.show()
-        #ani.save('everything6b.gif',writer=animation.PillowWriter(fps=10))
+        ani.save('everything6b.gif',writer=animation.PillowWriter(fps=25))
         #ani2.save('jointtimeseries.gif',writer=animation.PillowWriter(fps=10))
 
     def joint_velocity_time_series(self):
@@ -447,7 +476,46 @@ class ProcessedVideo:
 
     def print_move_sequence(self):
         print("Hand sequence:")
-        print(np.array(list(map(lambda x: [x[1], x[2].name], self.moves))))
+        moves = np.array(list(map(lambda x: [x[1], x[2].name,x[0]], self.moves)))
+        #print(moves)
+        num_moves = len(moves) 
+        if moves[0][0] == 'LH':
+            old_state = {'LH':moves[0], 'RH':moves[1]}
+            new_state = {'LH':moves[0], 'RH':moves[1]}
+        else:
+            old_state = {'LH':moves[1], 'RH':moves[0]}
+            new_state = {'LH':moves[1], 'RH':moves[0]}
+        print("Started with: left hand on {}, right hand on {}".format(old_state['LH'][1],old_state['RH'][1]))
+        for i in range(2,num_moves):
+            if moves[i][0] == 'LH':
+                new_state['LH'] = moves[i]
+                print("Moved left hand to {}".format(new_state['LH'][1]))
+            else:
+                new_state['RH'] = moves[i]
+                print("Moved right hand to {}".format(new_state['RH'][1]))
+            #print(old_state['LH'],old_state['RH'],"-->",new_state['LH'],new_state['RH'])
+            old_state['LH'] = new_state['LH']
+            old_state['RH'] = new_state['RH']
+
+
+    def prepare_moves_for_CNN(self):
+        moves = np.array(list(map(lambda x: [x[1], x[2].name,x[0]], self.moves)))
+        num_moves = len(moves) 
+        if moves[0][0] == 'LH':
+            old_state = {'LH':moves[0], 'RH':moves[1]}
+            new_state = {'LH':moves[0], 'RH':moves[1]}
+        else:
+            old_state = {'LH':moves[1], 'RH':moves[0]}
+            new_state = {'LH':moves[1], 'RH':moves[0]}
+
+        for i in range(2,num_moves):
+            if moves[i][0] == 'LH':
+                new_state['LH'] = moves[i]
+            else:
+                new_state['RH'] = moves[i]
+            print(old_state['LH'],old_state['RH'],"-->",new_state['LH'],new_state['RH'])
+            old_state['LH'] = new_state['LH']
+            old_state['RH'] = new_state['RH']
 
     def get_joint_moves(self, joint_name):
         frames = np.array(self.frames)
@@ -496,194 +564,4 @@ class ProcessedVideo:
             return hold.get_hold_id() in self.valid_holds 
         else:
             return self.kickboard_in
-        
-    def draw_moves(self):
-        fig, ax = plt.subplots(1,1, layout='compressed')
-        valid_hold_ids = list(map(lambda x: x[0], self.valid_holds))
-        ims = []
-
-        draw_bg = Image.fromarray(np.zeros((640,640,3)),mode='RGB')
-        draw = ImageDraw.Draw(draw_bg)
-        fnt = ImageFont.truetype("./../../resources/arial.TTF", 20)
-
-        n = 0
-        for i,hold in enumerate(self.board.handholds):
-            if i in valid_hold_ids:
-                if (self.valid_holds[n][1] == True) and (self.valid_holds[n][2] == False): 
-                    draw.rectangle(hold.region,outline='lime',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='lime')
-                elif (self.valid_holds[n][1] == False) and (self.valid_holds[n][2] == True): 
-                    draw.rectangle(hold.region,outline='red',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='red')
-                else:
-                    draw.rectangle(hold.region,outline='white',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
-                n+=1
-            else:
-                draw.rectangle(hold.region,outline='grey',width=1)
-        
-        for hold in self.board.footholds:
-            if self.kickboard_in == True:
-                draw.rectangle(hold.region,outline='white',width=4)
-                draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
-            else:
-                draw.rectangle(hold.region,outline='grey',width=1)
-
-        draw_on = copy.deepcopy(draw_bg)
-        draw = ImageDraw.Draw(draw_on)
-        LH = self.moves[0,2].center
-        RH = self.moves[1,2].center
-        LF = self.moves[2,2].center
-        RF = self.moves[3,2].center
-        im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-
-        ims.append([im1])
-        
-        for i in range(4,len(self.moves)):
-            draw_on = copy.deepcopy(draw_bg)
-            draw = ImageDraw.Draw(draw_on)
-            
-            joint_name = self.moves[i][1]
-            if joint_name == "LH":
-                LH = self.moves[i,2].center
-            if joint_name == "RH":
-                RH = self.moves[i,2].center
-            if joint_name == "LF":
-                LF = self.moves[i,2].center
-            if joint_name == "RF":
-                RF = self.moves[i,2].center
-
-            if LF == RF:
-                LF = (LF[0]-15, LF[1])
-                RF = (LF[0]+15, LF[1])
-            if LH == RH:
-                LH = (LH[0]-15, LH[1])
-                RH = (LH[0]+15, LH[1])
-
-            mid_shoulder = np.array([(RH[0]+LH[0])/2, (RH[1]+LH[1])/2])
-            mid_hip = np.array([(RF[0]+LF[0])/2, (RF[1]+LF[1])/2])
-
-            torso = mid_shoulder - mid_hip 
-            neck = mid_shoulder - 0.25*torso
-            neck = (neck[0],neck[1])
-            waist = mid_hip + 0.1*torso
-            waist = (waist[0],waist[1])
-
-            #head = mid_shoulder + 0.1*torso
-            #head = (head[0], head[1])
-
-            draw.circle(LH, radius=4, fill='red')
-            draw.circle(RH, radius=4, fill='red') 
-            draw.circle(LF, radius=4, fill='red') 
-            draw.circle(RF, radius=4, fill='red') 
-            draw.line([LH,neck], fill='lime', width=2)
-            draw.line([RH,neck], fill='lime', width=2)
-            draw.line([LF,waist], fill='lime', width=2)
-            draw.line([RF,waist], fill='lime', width=2)
-            draw.line([waist,neck], fill='lime', width=2)
-            #draw.circle(head, radius=10, outline='lime') 
-            #draw.rectangle(personRegion, outline='white', width=2)
-
-            im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-            #im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-
-            ims.append([im1])
-        ani = animation.ArtistAnimation(fig, ims, interval=500,repeat=True, blit=True)
-        plt.show()
-
-    def draw_moves_accurate(self):
-        fig, ax = plt.subplots(1,1, layout='compressed')
-        valid_hold_ids = list(map(lambda x: x[0], self.valid_holds))
-        #fig= plt.figure()
-        ims = []
-
-        draw_bg = Image.fromarray(np.zeros((640,640,3)),mode='RGB')
-        draw = ImageDraw.Draw(draw_bg)
-        fnt = ImageFont.truetype("./../../resources/arial.TTF", 20)
-
-        n = 0
-        for i,hold in enumerate(self.board.handholds):
-            if i in valid_hold_ids:
-                if (self.valid_holds[n][1] == True) and (self.valid_holds[n][2] == False): 
-                    draw.rectangle(hold.region,outline='lime',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='lime')
-                elif (self.valid_holds[n][1] == False) and (self.valid_holds[n][2] == True): 
-                    draw.rectangle(hold.region,outline='red',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='red')
-                else:
-                    draw.rectangle(hold.region,outline='white',width=4)
-                    draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
-                n+=1
-            else:
-                draw.rectangle(hold.region,outline='grey',width=1)
-        
-        for hold in self.board.footholds:
-            if self.kickboard_in == True:
-                draw.rectangle(hold.region,outline='white',width=4)
-                draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
-            else:
-                draw.rectangle(hold.region,outline='grey',width=1)
-
-        frames = np.array(self.frames)[self.moves[:,0].astype(int)]
-        
-        for i,person in enumerate(frames):
-            draw_on = copy.deepcopy(draw_bg)
-            draw = ImageDraw.Draw(draw_on)
-
-            person_region = person.region
-            person_center = person.get_center()
-
-            left_shoulder = person.joints[5,:]
-            right_shoulder = person.joints[6,:]
-            left_elbow = person.joints[7,:]
-            right_elbow = person.joints[8,:]     
-            left_wrist = person.joints[9,:]
-            right_wrist = person.joints[10,:]  
-            left_hip = person.joints[11,:]
-            right_hip = person.joints[12,:]    
-            left_knee = person.joints[13,:]
-            right_knee = person.joints[14,:]        
-            left_ankle = person.joints[15,:]
-            right_ankle = person.joints[16,:] 
-
-            draw.circle(left_shoulder, radius=4, fill='lime')
-            draw.circle(right_shoulder, radius=4, fill='lime') 
-            draw.circle(left_hip, radius=4, fill='lime') 
-            draw.circle(right_hip, radius=4, fill='lime') 
-            draw.circle(left_elbow, radius=4, fill='yellow') 
-            draw.circle(right_elbow, radius=4, fill='yellow') 
-            draw.circle(left_wrist, radius=4, fill='red') 
-            draw.circle(right_wrist, radius=4, fill='red') 
-            draw.circle(left_ankle, radius=4, fill='red') 
-            draw.circle(right_ankle, radius=4, fill='red') 
-            draw.circle(left_knee, radius=4, fill='yellow') 
-            draw.circle(right_knee, radius=4, fill='yellow')    
-
-            #draw.circle(personCenter, radius=4, fill=None)  
-
-            draw.line([tuple(left_hip),tuple(right_hip)], fill='lime', width=2)
-            draw.line([tuple(left_hip),tuple(left_shoulder)], fill='lime', width=2)
-            draw.line([tuple(left_shoulder),tuple(right_shoulder)], fill='lime', width=2)
-            draw.line([tuple(right_shoulder),tuple(right_hip)], fill='lime', width=2)
-
-            draw.line([tuple(right_shoulder),tuple(right_elbow)], fill='yellow', width=2)
-            draw.line([tuple(left_shoulder),tuple(left_elbow)], fill='yellow', width=2)
-            draw.line([tuple(right_elbow),tuple(right_wrist)], fill='yellow', width=2)
-            draw.line([tuple(left_elbow),tuple(left_wrist)], fill='yellow', width=2)
-
-            draw.line([tuple(left_hip),tuple(left_knee)], fill='yellow', width=2)
-            draw.line([tuple(right_hip),tuple(right_knee)], fill='yellow', width=2)
-            draw.line([tuple(left_knee),tuple(left_ankle)], fill='yellow', width=2)
-            draw.line([tuple(right_knee),tuple(right_ankle)], fill='yellow', width=2)
-
-            #draw.rectangle(personRegion, outline='white', width=2)
-            draw.text((30,30),str(self.moves[:,0][i]), font=fnt, fill='white')
-
-            im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-            #im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-
-            ims.append([im1])
-
-        ani = animation.ArtistAnimation(fig, ims, interval=1000, repeat=True, blit=True)
-
-        plt.show()
+     

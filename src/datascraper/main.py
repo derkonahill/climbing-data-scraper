@@ -32,14 +32,20 @@ save_path = "./../../datasets/climbing_videos/hdf5/2024_samples/"
 # Uncomment the following two lines to process new videos. The videos in the samples 
 # list above have already been processed and saved to save_path, so no need to uncomment for these examples.
 #video.load_from_MP4(source_path, source, ext, "2024", start_time,end_time)
+
+# Remove frames that have been incorrectly labelled by the key-point pose model
+#video.remove_outlier_frames(False)
+
 #video.save_to_HDF5(save_path+source+".hdf5")
 
 # Load processed video from HDF5 file
-print("Loading from HDF")
+
+
+#print("Loading from HDF")
 video.load_from_HDF5(save_path+source+".hdf5")
 
-# Remove frames that have been incorrectly labelled by the key-point pose model
-video.remove_outlier_frames()
+#video.play_MP4(source_path, source, ext, "2024", start_time,end_time)
+
 p_video = mcv.ProcessedVideo()
 # Set the climbing holds for the processed video from the unprocessed video.
 p_video.set_board(video)
@@ -50,8 +56,9 @@ p_video.set_board(video)
 batch_size = 10
 p_video.set_frames(video, batch_size)
 # Analyze the joint movement from the processed video, and extract the climbing move sequence
-p_video.set_moves_from_time_series()
+#p_video.set_moves_from_time_series()
 # Output the climbing move sequence
 p_video.print_move_sequence()
+p_video.prepare_moves_for_CNN()
 # Playback the processed video and corresponding hand time series
-p_video.play()
+#p_video.play()
