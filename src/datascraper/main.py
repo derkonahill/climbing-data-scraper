@@ -3,9 +3,6 @@ import videos as mcv
 """
 The datascraper module can be used to extract moonboard climbing move sequences and poses 
 from a video. This file serves as an example of how the general data extraction process works.
-
-This file is the first major step in the remaining portion of this project, where I plan to 
-train a neural network to solve moonboard climbing problems with Youtube videos.
 """
 
 # Create an unprocessed video object
@@ -59,6 +56,8 @@ p_video.set_frames(video, batch_size)
 #p_video.set_moves_from_time_series()
 # Output the climbing move sequence
 p_video.print_move_sequence()
-p_video.prepare_moves_for_CNN()
+
+save_path = save_path + "move_sequences/"
+p_video.save_moves_to_HDF5(save_path,source)
 # Playback the processed video and corresponding hand time series
 #p_video.play()

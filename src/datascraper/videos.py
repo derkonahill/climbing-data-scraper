@@ -4,6 +4,7 @@ import itertools as it
 import copy
 import torchvision as tv
 from torchvision.transforms import v2
+from timeit import default_timer as dt
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -245,7 +246,6 @@ class ProcessedVideo:
                 temp[-1] = last_frame_batch_size
                 new_frame_structure = zip(range(num_new_frames),temp)
             slice_set = list(map(lambda x: np.s_[x[0]*new_frame_batch_size:x[0]*new_frame_batch_size + x[1]], new_frame_structure))
-            #print(slice_set)
             sliced_frames = list(map(lambda x: frames[x].tolist(), slice_set)) 
             self.frames = list(map(self.average_pose, sliced_frames))
         
@@ -274,7 +274,6 @@ class ProcessedVideo:
     def play(self):
         fig, ax = plt.subplots(1,1, layout='compressed')
         valid_hold_ids = list(map(lambda x: x[0], self.valid_holds))
-        #fig= plt.figure()
         ims = []
 
         draw_bg = Image.fromarray(np.zeros((640,640,3)),mode='RGB')
@@ -301,8 +300,6 @@ class ProcessedVideo:
             if self.kickboard_in == True:
                 try:
                     draw.rectangle(hold.region,fill=(0,0,250),width=4)
-                    #print(hold.region)
-                    #print(hold.name)
                     draw.text((hold.region[2],hold.region[3]), hold.name, font=fnt, fill='white')
                 except:
                     print("couldnt draw")
@@ -311,7 +308,6 @@ class ProcessedVideo:
 
             
         for i,person in enumerate(self.frames):
-            #print(person.joints)
             draw_on = copy.deepcopy(draw_bg)
             draw = ImageDraw.Draw(draw_on)
 
@@ -372,7 +368,6 @@ class ProcessedVideo:
             #draw.rectangle(personRegion, outline='white', width=2)
 
             im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
-            #im1 = plt.imshow(draw_on, animated=True)  # plot a BGR numpy array of predictions 
 
             ims.append([im1])
 
@@ -381,18 +376,10 @@ class ProcessedVideo:
         ims2 = []
         for i,person in enumerate(self.frames):
             im2 = ax2.axvline(x=i, color='red')
-            #im3 = ax2[1].axvline(x=i, color='red')
             ims2.append([im2])
 
         ax2.plot(joint_time_series[0], label='Left Hand')
         ax2.plot(joint_time_series[1], label='Right Hand', linestyle='dashed')
-        #ax2[1].plot(joint_time_series[2], label='Left Foot')
-        #ax2[1].plot(joint_time_series[3], label='Right Foot',linestyle='dashed')
-
-        #ax2[2].plot(joint_time_series[4], label='Foot Movement')
-        #ax2[2].plot(joint_time_series[5], label='Total',linestyle='dashed')
-            
-        #
 
         ani = animation.ArtistAnimation(fig, ims, interval=22,repeat=True, blit=True)
         ani2 = animation.ArtistAnimation(fig2, ims2, interval=22,repeat=True, blit = True)
@@ -400,7 +387,7 @@ class ProcessedVideo:
         ax2.legend()
         
         plt.show()
-        ani.save('everything6b.gif',writer=animation.PillowWriter(fps=25))
+        #ani.save('everything6b.gif',writer=animation.PillowWriter(fps=25))
         #ani2.save('jointtimeseries.gif',writer=animation.PillowWriter(fps=10))
 
     def joint_velocity_time_series(self):
@@ -414,8 +401,6 @@ class ProcessedVideo:
         right_hand_vx = np.abs(-np.convolve(joint_time_series2[:,5][:,1],hand_kernel,mode='full')[0:len(joint_time_series2)])
         right_hand_vy = np.abs(-np.convolve(joint_time_series2[:,5][:,1],hand_kernel,mode='full')[0:len(joint_time_series2)])
 
-        #left_hand_plot = left_hand_vx+ left_hand_vy
-        #right_hand_plot = right_hand_vx+ right_hand_vy
 
         left_hand = np.where(left_hand_vx + left_hand_vy > 60, left_hand_vx + left_hand_vy, np.zeros(len(joint_time_series2)))
         right_hand = np.where(right_hand_vx + right_hand_vy > 60, right_hand_vx + right_hand_vy, np.zeros(len(joint_time_series2)))
@@ -424,12 +409,12 @@ class ProcessedVideo:
 
         
         foot_kernel = np.ones(2)
-        left_foot_vx = np.abs(np.convolve(joint_time_series2[:,10][:,0],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) #+ np.abs(np.convolve(joint_time_series3[:,10][:,0],foot_kernel,mode='full')[0:len(joint_time_series3)]*footMask)
-        left_foot_vy = np.abs(np.convolve(joint_time_series2[:,10][:,1],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) #+ np.abs(np.convolve(joint_time_series3[:,10][:,1],foot_kernel,mode='full')[0:len(joint_time_series3)]*footMask)
+        left_foot_vx = np.abs(np.convolve(joint_time_series2[:,10][:,0],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) 
+        left_foot_vy = np.abs(np.convolve(joint_time_series2[:,10][:,1],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask)
         left_foot = np.abs(left_foot_vx) + np.abs(left_foot_vy)
 
-        right_foot_vx = np.abs(np.convolve(joint_time_series2[:,11][:,0],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) #+ np.abs(np.convolve(joint_time_series3[:,11][:,0],foot_kernel,mode='full')[0:len(joint_time_series3)]*footMask)
-        right_foot_vy = np.abs(np.convolve(joint_time_series2[:,11][:,1],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) #+ np.abs(np.convolve(joint_time_series3[:,11][:,1],foot_kernel,mode='full')[0:len(joint_time_series3)]*footMask)
+        right_foot_vx = np.abs(np.convolve(joint_time_series2[:,11][:,0],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) 
+        right_foot_vy = np.abs(np.convolve(joint_time_series2[:,11][:,1],foot_kernel,mode='full')[0:len(joint_time_series2)]*footMask) 
         right_foot = np.abs(right_foot_vx) + np.abs(right_foot_vy)
 
         left_hand = np.where(left_hand > 60, left_hand, np.zeros(len(joint_time_series2)))
@@ -440,44 +425,16 @@ class ProcessedVideo:
         left_hand_plot = np.where(left_hand_plot < 0, np.abs(left_hand_plot), np.zeros(len(joint_time_series3)))
         right_hand_plot = np.where(right_hand_plot < 0, np.abs(right_hand_plot), np.zeros(len(joint_time_series3)))
 
-        """
-        left_foot = np.where(left_foot > 30, left_foot, np.zeros(len(joint_time_series2)))
-        right_foot = np.where(right_foot > 30, right_foot, np.zeros(len(joint_time_series2)))  
-        
-        filtered_left_foot = np.where(left_foot-right_foot > 0, np.abs(left_foot-right_foot)/np.max(np.abs(left_foot+right_foot))*left_foot, np.zeros(len(joint_time_series2)))
-        filtered_right_foot = np.where(right_foot -left_foot > 0, np.abs(left_foot-right_foot)/np.max(np.abs(left_foot+right_foot))*right_foot, np.zeros(len(joint_time_series2)))  
-        filtered_left_foot = left_foot 
-        filtered_right_foot = right_foot
-
-        foot_kernel = np.ones(5)
-        filtered_left_foot = np.convolve(np.where(filtered_left_foot > 0, np.ones(len(joint_time_series3)), np.zeros(len(joint_time_series3))),foot_kernel,mode='full')[0:len(joint_time_series2)]
-        filtered_right_foot = np.convolve(np.where(filtered_right_foot > 0, np.ones(len(joint_time_series3)), np.zeros(len(joint_time_series3))),foot_kernel,mode='full')[0:len(joint_time_series2)]
-        temp_left_foot = np.where(filtered_left_foot > 0, np.ones(len(joint_time_series3)), np.zeros(len(joint_time_series2)))
-        temp_right_foot = np.where(filtered_right_foot > 0, np.ones(len(joint_time_series3)), np.zeros(len(joint_time_series2)))
-        #filtered_right_foot = filtered_left_foot
-        filtered_right_foot_prime = np.where(np.gradient(temp_right_foot) < 0, np.abs(temp_right_foot), np.zeros(len(joint_time_series3)))
-        filtered_left_foot_prime = np.where(np.gradient(temp_left_foot) < 0, np.abs(temp_left_foot), np.zeros(len(joint_time_series3)))
-
-        foot_movement1 = filtered_left_foot 
-        foot_movement2 = filtered_right_foot
-
-        totalSignal = left_foot + right_foot + 0*(left_hand + right_hand)
-        """
-        return [left_hand_plot, right_hand_plot]#, filtered_left_foot_prime, filtered_right_foot_prime, foot_movement1, foot_movement2]
+        return [left_hand_plot, right_hand_plot]
     
     def set_moves_from_time_series(self):
         left_hand_moves = self.get_joint_moves("LH")
         right_hand_moves = self.get_joint_moves("RH")
-        #left_foot_moves = self.get_joint_moves("LF")
-        #right_foot_moves = self.get_joint_moves("RF")
         self.moves = np.array(sorted(left_hand_moves + right_hand_moves, key=lambda x: x[0]))
-        #self.moves = np.array(sorted(left_hand_moves + right_hand_moves + left_foot_moves + right_foot_moves, key=lambda x: x[0]))
-        #print(self.moves)
 
     def print_move_sequence(self):
         print("Hand sequence:")
         moves = np.array(list(map(lambda x: [x[1], x[2].name,x[0]], self.moves)))
-        #print(moves)
         num_moves = len(moves) 
         if moves[0][0] == 'LH':
             old_state = {'LH':moves[0], 'RH':moves[1]}
@@ -493,14 +450,14 @@ class ProcessedVideo:
             else:
                 new_state['RH'] = moves[i]
                 print("Moved right hand to {}".format(new_state['RH'][1]))
-            #print(old_state['LH'],old_state['RH'],"-->",new_state['LH'],new_state['RH'])
             old_state['LH'] = new_state['LH']
             old_state['RH'] = new_state['RH']
 
-
-    def prepare_moves_for_CNN(self):
+    def save_moves_to_HDF5(self, save_path, source):
         moves = np.array(list(map(lambda x: [x[1], x[2].name,x[0]], self.moves)))
         num_moves = len(moves) 
+
+        data_pairs = []
         if moves[0][0] == 'LH':
             old_state = {'LH':moves[0], 'RH':moves[1]}
             new_state = {'LH':moves[0], 'RH':moves[1]}
@@ -508,14 +465,50 @@ class ProcessedVideo:
             old_state = {'LH':moves[1], 'RH':moves[0]}
             new_state = {'LH':moves[1], 'RH':moves[0]}
 
+        valid_holds = set(map(Board.get_hold_name, self.valid_holds[:,0]))
+        
+        valid_holds_vector_rep = [0]*18*11
+
+        for n in self.valid_holds[:,0]:
+            valid_holds_vector_rep[n] = 1
+        
+        if (old_state['LH'][1] in valid_holds) and (old_state['RH'][1] in valid_holds) and (new_state['LH'][1] in valid_holds) and (new_state['RH'][1] in valid_holds):
+            OS_LH = Board.holds_vector_representation(old_state['LH'][1])
+            OS_RH = Board.holds_vector_representation(old_state['RH'][1])
+            NS_LH = Board.holds_vector_representation(new_state['LH'][1])
+            NS_RH = Board.holds_vector_representation(new_state['RH'][1])
+            data_pairs.append([valid_holds_vector_rep,OS_LH,OS_RH,NS_LH,NS_RH])
+
         for i in range(2,num_moves):
             if moves[i][0] == 'LH':
                 new_state['LH'] = moves[i]
             else:
                 new_state['RH'] = moves[i]
-            print(old_state['LH'],old_state['RH'],"-->",new_state['LH'],new_state['RH'])
+            if (old_state['LH'][1] in valid_holds) and (old_state['RH'][1] in valid_holds) and (new_state['LH'][1] in valid_holds) and (new_state['RH'][1] in valid_holds):
+                print(old_state['LH'],old_state['RH'],"-->",new_state['LH'],new_state['RH'])
+                OS_LH = Board.holds_vector_representation(old_state['LH'][1])
+                OS_RH = Board.holds_vector_representation(old_state['RH'][1])
+                NS_LH = Board.holds_vector_representation(new_state['LH'][1])
+                NS_RH = Board.holds_vector_representation(new_state['RH'][1])
+                data_pairs.append([valid_holds_vector_rep,OS_LH,OS_RH,NS_LH,NS_RH])
             old_state['LH'] = new_state['LH']
             old_state['RH'] = new_state['RH']
+
+        data_pairs = np.array(data_pairs)
+
+        output = save_path + source + "_moves.hdf5"
+        with h5py.File(output, "a") as of:
+            of.attrs['video_name'] = source
+            #grp = of.create_group("moves")
+            of.create_dataset("moves", data=data_pairs[1:,:,:])
+        
+            #grp = of.create_group("config")
+            #grp.create_dataset("start_LH", data=data_pairs[0,1,:])
+            #grp.create_dataset("start_RH", data=data_pairs[0,2,:])
+            #grp.create_dataset("finish_LH", data=data_pairs[-1,3,:])
+            #grp.create_dataset("finish_RH", data=data_pairs[-1,4,:])
+
+        #self.play()
 
     def get_joint_moves(self, joint_name):
         frames = np.array(self.frames)
@@ -535,7 +528,6 @@ class ProcessedVideo:
             joint_index = 16
         nearest_hold = self.get_nearest_hold_to_hand(frames[0].joints[joint_index,:])
         moves.append([0, joint_name, nearest_hold])
-        #print(moves)
         select_frames = frames[key]
         for i,f in enumerate(select_frames):
             n = len(moves)
@@ -545,16 +537,13 @@ class ProcessedVideo:
         return moves
 
     def get_nearest_hold_to_hand(self, joint_position):
-        #print(joint_position)
         holds = np.concatenate((self.board.handholds, self.board.footholds))
         distances = list(map(lambda x: x.distance_to_hold(joint_position), holds))
         threshold = 8 # 4 nearest holds
         min_distance_holds = holds[np.argsort(distances)[:threshold]]
-        #valid_min_distance_holds = np.where(Board.get_hold_id)
         min_distance_hold_names = list(map(lambda x: x.name, min_distance_holds))
         valid_holds = list(filter(self.check_if_hold_in_climb, min_distance_holds))
         if len(valid_holds) > 0:
-            #print(list(map(lambda x: x.name, valid_holds)))
             return valid_holds[0]
         else:
             return min_distance_holds[0]

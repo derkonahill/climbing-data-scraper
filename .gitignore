@@ -8,3 +8,6 @@
 /datasets/climbing_videos/hdf5/2024_shortuglybeta/
 /src/datascraper/test.py
 /src/datascraper/process_videos.sh
+/src/datascraper/extract_moves.py
+/src/datascraper/results_error_check
+/src/datascraper/results.txt

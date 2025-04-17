@@ -228,22 +228,33 @@ class Board:
         regression = LinearRegression().fit(hold_centers[:,0].reshape(-1,1),hold_centers[:,1])
         return [regression.coef_[0], regression.intercept_]
 
+    @staticmethod
     def get_grid_index(name):
         shift = ord('a')
         col = (ord((name[0]).lower())-shift)
         row = 18 - int(name[1::])
         return (row,col)
-
+    
+    @staticmethod
     def get_hold_id(name):
         temp_grid_index = Board.get_grid_index(name)
         return temp_grid_index[0]*11 + temp_grid_index[1]
 
+    @staticmethod
     def get_hold_name(id):
         shift = ord('A')
         row = str(18 - (int(np.floor(id/11))))
         col = chr(id%11 +shift)
         name = "" + col + row
         return name
+    
+    @staticmethod
+    def holds_vector_representation(hold):
+        temp = [0]*18*11
+        if isinstance(hold,str):
+            index = Board.get_hold_id(hold)
+        temp[index] = 1
+        return temp
 
 
 class Hold:
