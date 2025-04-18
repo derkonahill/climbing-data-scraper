@@ -18,10 +18,6 @@ L_CALF = 5
 R_QUAD = 6 
 R_CALF = 7
 
-class Frame:
-    def __init__(self, board, person):
-        self.board = board 
-        self.person = person
 
 class Board:
     def __init__(self):
@@ -317,23 +313,44 @@ class Hold:
 
 
 class Person:
-    def __init__(self, region, joints):
+    """Person objects store the joints positions and bounding box region for a detected human 
+    using the ultralytics pose model: models/yolov8m-pose.pt. 
+
+    Attributes:
+        region: person region is specified by a 1x4 numpy array: [top_left_x,top_left_y,bottom_right_x,bottom_right_y]
+        joints: there are 17 joints tracked by the ultralytics keypoint model, specified by a 17x2 numpy array. 
+                Joint indexing follows the ultralytics convention found at https://docs.ultralytics.com/tasks/pose/.
+    """
+    def __init__(self, region: np.ndarray, joints: np.ndarray)->None:
         self.region = region 
         self.joints = joints
 
-    def get_center(self):
+    def get_center(self)->np.ndarray:
+        """Calculate the center of Person region.
+
+        Args:
+            None 
+
+        Returns:
+            1x2 numpy array storing the coordinates of the region center
+        """
         person_region = self.region
         return np.array([person_region[0]+0.5*(person_region[2]-person_region[0]),person_region[1]+0.5*(person_region[3]-person_region[1])])
 
-    def get_limbs(self):
+    def get_limbs(self)->np.ndarray:
+        """Calculates all limb vectors from joints
+
+        Args:
+            None
+
+        Returns:
+            8x2 numpy array storing direction vectors for each limb
+        """
         limbs = np.zeros((8,2))
         limbs[L_BICEP,:] = self.get_left_bicep()
         limbs[L_FOREARM,:] = self.get_left_forearm()
         limbs[R_BICEP,:] = self.get_right_bicep()
         limbs[R_FOREARM,:] = self.get_right_forearm()
-        limbs[L_QUAD,:] = self.get_left_quad()
-        limbs[L_CALF,:] = self.get_left_calf()
-        limbs[R_QUAD,:] = self.get_right_quad()
         limbs[R_CALF,:] = self.get_right_calf()
         return limbs
 
@@ -384,3 +401,16 @@ class Person:
         right_knee = self.joints[14,:]        
         right_ankle = self.joints[16,:]
         return right_ankle-right_knee
+    
+class Frame:
+    """Frame objects consist of a Person and Board. An unprocessed Video contains a list
+    of Frames, storing the detected joints and holds from their respective computer vision models: 
+    models/yolov8m-pose.pt and models/yolo11m_finetuned.pt. 
+
+    Attributes:
+        board: Detected Board in the current video frame.
+        person: Detected Person in the current video frame.
+    """
+    def __init__(self, board: Board, person: Person)->None:
+        self.board = board 
+        self.person = person

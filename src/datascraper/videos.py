@@ -49,14 +49,20 @@ class Video:
         self.kickboard_in = kickboard_in
 
     def play_MP4(self, source_path, source, ext, year, start_time, end_time):
-        frame_filter = np.load("frame_filter.npy")
         path = source_path+source+ext 
         video,_,_ = tv.io.read_video(path,start_pts = start_time,end_pts = end_time, pts_unit = 'sec',output_format='TCHW')
         print("Done Reading Video.")
         transforms = v2.Compose([
             v2.Resize([640,640])
         ])
-        frame_filter = np.where(frame_filter == True, False, True)
+
+        try:
+            frame_filter = np.load("frame_filter.npy")
+        except:
+            print("Frame filter not found, keeping all frames. To save a frame filter, call set frame_filter=True when calling Video.remove_outlier_frames().")
+            frame_filter = np.zeros(video.shape[0])
+
+        filtered_frames = np.where(frame_filter == True, False, True)
         images=np.uint8(np.transpose(transforms(video).float(),(0,2,3,1)).numpy())
         print(len(images))
         num_frames = images.shape[0]
@@ -67,7 +73,7 @@ class Video:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter('output.mp4', fourcc, fps, (size[1], size[0]), True)
         for i in range(num_frames):
-            if frame_filter[i] == True:
+            if filtered_frames[i] == True:
                 out.write(images[i][:,:,::-1])
         out.release()
 
@@ -79,7 +85,7 @@ class Video:
         print("Reading video.")
         video,_,_ = tv.io.read_video(path,start_pts = self.start_time,end_pts = end_time, pts_unit = 'sec',output_format='TCHW')
         print("Done Reading Video.")
-        detect_holds = YOLO('./../../models/runs/detect/2024_shortuglybeta/weights/best.pt')
+        detect_holds = YOLO('./../../models/yolo11m_finetuned.pt')
         detect_pose = YOLO('./../../models/yolov8m-pose.pt')
         transforms = v2.Compose([
             v2.Resize([640,640])
@@ -104,7 +110,7 @@ class Video:
                 frame = Frame(board, person)
                 self.frames.append(frame)
             except:
-                print("Couldn't add frame {}.".format(i))
+                print("Couldn't add frame {}. May need to further fine-tune models/yolo11m_finetuned.pt or models/yolov8m-pose.pt".format(i))
                 count+=1
         print("Done predicting pose and holds.")
         if count > 0:
@@ -140,7 +146,7 @@ class Video:
                 self.climb_in_database = False
 
     def save_to_HDF5(self, output):
-        with h5py.File(output, "a") as of:
+        with h5py.File(output, "w") as of:
             vid = of.create_group("video")
             dset0_1 = vid.create_dataset("kickboardIn", data=[self.kickboard_in])
             dset0_2 = vid.create_dataset("validHolds", data=self.valid_holds)
@@ -189,12 +195,12 @@ class Video:
                     self.valid_holds = of["video/validHolds"][:]
             self.frames = frames
     
-    def remove_outlier_frames(self, save):
+    def remove_outlier_frames(self, frame_filter):
         filtered_frames = list(filter(lambda x: x.person.outlier_joints() == False, self.frames))
         print("Original video had "+ str(len(self.frames)) +" frames.")
         print("Removed " + str((len(self.frames) - len(filtered_frames))) +" suspicious frames.")
         print("Current frame number: " + str(len(filtered_frames)))
-        if save==True:
+        if frame_filter==True:
             filter_list = np.array(list(map(lambda x: x.person.outlier_joints(),self.frames)))
             np.save("frame_filter.npy",filter_list)
         self.frames = filtered_frames
@@ -228,6 +234,7 @@ class ProcessedVideo:
         self.kickboard_in = video.kickboard_in
 
     def set_frames(self, video, n):
+        self.set_board(video)
         frames = np.array(list(map(lambda x: x.person, video.frames)))
         if n == 1:
             self.frames = frames
@@ -497,7 +504,7 @@ class ProcessedVideo:
         data_pairs = np.array(data_pairs)
 
         output = save_path + source + "_moves.hdf5"
-        with h5py.File(output, "a") as of:
+        with h5py.File(output, "w") as of:
             of.attrs['video_name'] = source
             #grp = of.create_group("moves")
             of.create_dataset("moves", data=data_pairs[1:,:,:])

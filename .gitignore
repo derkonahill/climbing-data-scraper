@@ -6,6 +6,7 @@
 /datasets/climbing_videos/hdf5/2019_shortuglybeta/
 /datasets/climbing_videos/hdf5/2024_andyliu84/
 /datasets/climbing_videos/hdf5/2024_shortuglybeta/
+/models/runs/
 /src/datascraper/test.py
 /src/datascraper/process_videos.sh
 /src/datascraper/extract_moves.py
